@@ -1305,31 +1305,6 @@ section {
 .confirm-icon { font-size: 3rem; display: block; margin-bottom: 0.8rem; }
 .order-confirm h3 { font-size: 1.5rem; margin-bottom: 0.6rem; }
 .order-confirm p { color: var(--mocha); margin-bottom: 1.5rem; line-height: 1.6; }
-.orders-saved-note {
-    font-size: 0.82rem;
-    color: var(--coffee) !important;
-    background: rgba(192, 134, 79, 0.12);
-    border: 1px dashed var(--accent);
-    border-radius: 8px;
-    padding: 0.5rem 0.8rem;
-    margin-bottom: 1.2rem !important;
-}
-.confirm-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-}
-/* dark-friendly ghost button for use on the light modal */
-.btn-ghost-dark {
-    background: transparent;
-    color: var(--coffee);
-    border-color: var(--accent);
-}
-.btn-ghost-dark:hover {
-    background: var(--coffee);
-    color: var(--foam);
-    transform: translateY(-3px);
-}
 
 @media (max-width: 500px) {
     .checkout-modal { padding: 1.6rem; }
@@ -1634,14 +1609,7 @@ section {
                 <span class="confirm-icon">&#9749;</span>
                 <h3>Thank you, <span id="confirm-name"></span>!</h3>
                 <p id="confirm-details"></p>
-                <p class="orders-saved-note">
-                    Saved to your orders sheet &middot;
-                    <strong><span id="orders-count">0</span></strong> order(s) recorded.
-                </p>
-                <div class="confirm-actions">
-                    <button type="button" class="btn btn-primary" id="export-orders">&#128229; Export Orders to Excel</button>
-                    <button type="button" class="btn btn-ghost btn-ghost-dark" id="confirm-done">Done</button>
-                </div>
+                <button type="button" class="btn btn-primary" id="confirm-done">Done</button>
             </div>
         </div>
     </div>
@@ -1975,78 +1943,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const confirmName = document.getElementById("confirm-name");
     const confirmDetails = document.getElementById("confirm-details");
     const confirmDone = document.getElementById("confirm-done");
-    const exportBtn = document.getElementById("export-orders");
-    const ordersCountEl = document.getElementById("orders-count");
-
-    /* ---- Orders store: keep every order in localStorage ---- */
-    const ORDERS_KEY = "brewHavenOrders";
-    const loadOrders = () => {
-        try { return JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; }
-        catch (e) { return []; }
-    };
-    const saveOrder = (order) => {
-        const all = loadOrders();
-        all.push(order);
-        try { localStorage.setItem(ORDERS_KEY, JSON.stringify(all)); } catch (e) {}
-    };
-
-    /* ---- Export all saved orders to a real Excel file (.xls, SpreadsheetML) ---- */
-    const xmlEsc = (s) => String(s)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-    const exportOrdersToExcel = () => {
-        const orders = loadOrders();
-        if (!orders.length) {
-            alert("No orders yet — place an order first, then export.");
-            return;
-        }
-        const headers = ["Order #", "Date & Time", "Customer", "Items", "Total Qty", "Total (INR)", "Payment Method"];
-
-        const cell = (val, type) =>
-            `<Cell><Data ss:Type="${type}">${xmlEsc(val)}</Data></Cell>`;
-
-        const headerRow =
-            "<Row>" + headers.map((h) =>
-                `<Cell ss:StyleID="hdr"><Data ss:Type="String">${xmlEsc(h)}</Data></Cell>`
-            ).join("") + "</Row>";
-
-        const dataRows = orders.map((o, i) =>
-            "<Row>" +
-            cell(i + 1, "Number") +
-            cell(o.datetime, "String") +
-            cell(o.customer, "String") +
-            cell(o.items, "String") +
-            cell(o.qty, "Number") +
-            cell(o.total, "Number") +
-            cell(o.payment, "String") +
-            "</Row>"
-        ).join("");
-
-        const xls =
-            '<?xml version="1.0"?>' +
-            '<?mso-application progid="Excel.Sheet"?>' +
-            '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
-            'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' +
-            '<Styles>' +
-            '<Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/>' +
-            '<Interior ss:Color="#6F4E37" ss:Pattern="Solid"/></Style>' +
-            '</Styles>' +
-            '<Worksheet ss:Name="Orders"><Table>' +
-            headerRow + dataRows +
-            '</Table></Worksheet></Workbook>';
-
-        const blob = new Blob([xls], { type: "application/vnd.ms-excel" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        a.href = url;
-        a.download = `BrewHaven-Orders-${stamp}.xls`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    };
 
     const money = (n) => "\u20B9" + n.toLocaleString("en-IN");
 
@@ -2181,17 +2077,6 @@ document.addEventListener("DOMContentLoaded", () => {
             `<strong>${money(totalPrice())}</strong> is confirmed.<br>` +
             `Payment method: <strong>${method}</strong>.`;
 
-        // --- Save the order to the running orders sheet (localStorage) ---
-        saveOrder({
-            datetime: new Date().toLocaleString("en-IN"),
-            customer: customer,
-            items: itemsText,
-            qty: totalCount(),
-            total: totalPrice(),
-            payment: method,
-        });
-        ordersCountEl.textContent = loadOrders().length;
-
         // Hide the order form and totals, show the confirmation
         summaryEl.style.display = "none";
         document.querySelector(".order-total-row").style.display = "none";
@@ -2208,11 +2093,6 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmBox.hidden = true;
         closeCheckout();
     });
-
-    // Export orders to Excel when the button is clicked
-    if (exportBtn) exportBtn.addEventListener("click", exportOrdersToExcel);
-    // show how many orders are already recorded
-    if (ordersCountEl) ordersCountEl.textContent = loadOrders().length;
 
     updateBadge();
 });
